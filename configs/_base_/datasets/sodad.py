@@ -1,5 +1,5 @@
 dataset_type = 'SODADDataset'
-data_root = '/data/SODA-D/'
+data_root = '/home/cv09f26/group9/CFINet/data/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 
@@ -35,21 +35,21 @@ data = dict(
     train=dict(
         type=dataset_type,
         ann_file=data_root + 'divData/Annotations/train.json',
-        img_prefix=data_root + 'divData/Images/',
+        img_prefix=data_root + 'divData/Images/train',
         pipeline=train_pipeline,
-        ori_ann_file=data_root + 'rawData/Annotations/train.json'
+        ori_ann_file=data_root + 'SODA-D/rawData/Annotations/train.json'
     ),
     val=dict(
         type=dataset_type,
         ann_file=data_root + 'divData/Annotations/val.json',
-        img_prefix=data_root + 'divData/Images/',
+        img_prefix=data_root + 'divData/Images/val',
         pipeline=test_pipeline,
-        ori_ann_file=data_root + 'rawData/Annotations/val_wo_ignore.json'
+        ori_ann_file=data_root + 'SODA-D/rawData/Annotations/val.json'
     ),
     test=dict(
         type=dataset_type,
         ann_file=data_root + 'divData/Annotations/test.json',
-        img_prefix=data_root + 'divData/Images/',
+        img_prefix=data_root + 'divData/Images/test',
         pipeline=test_pipeline,
-        ori_ann_file=data_root + 'rawData/Annotations/test_wo_ignore.json'
+        ori_ann_file=data_root + 'SODA-D/rawData/Annotations/test.json'
     ))

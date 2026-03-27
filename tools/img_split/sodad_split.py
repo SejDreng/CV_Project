@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 import warnings
 warnings.filterwarnings("ignore", category=Warning)
 
+# Get the directory of the current script for relative path resolution
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 class SODADSplit(object):
     """
     Args:
@@ -444,8 +447,7 @@ class SODADSplit(object):
 
 def add_parser(parser):
     """Add arguments."""
-    parser.add_argument('--cfgJson', default="./split_configs/split_train.json",
-                        help='config json for split images')
+    parser.add_argument('--cfgJson', default=os.path.join(SCRIPT_DIR, "split_configs/split_train.json"), help='config json for split images')
     parser.add_argument(
         '--mode', type=str, default='train')
     parser.add_argument(
@@ -538,7 +540,7 @@ def parse_args():
 
     assert args.interAreaIgnThr >= 0 and args.interAreaIgnThr < 1
     if not osp.exists(args.splDir):
-        os.mkdir(args.splDir)
+        os.makedirs(args.splDir, exist_ok=True)
     return args
 
 def main():

@@ -101,11 +101,13 @@ class FIRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
 
     def _mkdir(self, con_queue_dir, num_gpus):
         if os.path.exists(con_queue_dir):
-            shutil.rmtree(con_queue_dir)
-        os.mkdir(con_queue_dir)
+            #shutil.rmtree(con_queue_dir)
+            shutil.rmtree(con_queue_dir, ignore_errors=True)
+        os.makedirs(con_queue_dir, exist_ok=True)
         for i in range(num_gpus):
-            os.makedirs(os.path.join(con_queue_dir, str(i)))
-
+            #os.makedirs(os.path.join(con_queue_dir, str(i)))
+            os.makedirs(os.path.join(con_queue_dir, str(i)), exist_ok=True)
+            
     def init_assigner_sampler(self):
         """Initialize assigner and sampler."""
         self.bbox_assigner = None
@@ -297,6 +299,8 @@ class FIRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         dup_len = cur_gt_roi_feat.size(0) > int(self.num_con_queue // self.num_gpus)
         if dup_len > 0:
             cur_gt_roi_feat = cur_gt_roi_feat[-dup_len, ...]
+
+        os.makedirs(os.path.dirname(cur_gt_save_pth), exist_ok=True) #added
         torch.save(
             cur_gt_roi_feat, cur_gt_save_pth, _use_new_zipfile_serialization=False)
 

@@ -7,6 +7,8 @@ NODE_RANK=${NODE_RANK:-0}
 PORT=${PORT:-29500}
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
 python -m torch.distributed.launch \
     --nnodes=$NNODES \
