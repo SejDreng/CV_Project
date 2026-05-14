@@ -2,9 +2,9 @@ _base_ = ['../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py']
 
 # dataset settings
 dataset_type = 'SODADDataset'
-data_root = '/data/SODA-D/'
+data_root = '/home/cv09f26/group9/CFINet/data/'
 
-img_scale = (1216, 1216)  # height, width
+img_scale = (1200, 1200)  # height, width (match CFINet)
 
 # model settings
 model = dict(
@@ -58,8 +58,8 @@ train_dataset = dict(
     dataset=dict(
         type=dataset_type,
         ann_file=data_root + 'divData/Annotations/train.json',
-        img_prefix=data_root + 'divData/Images/',
-        ori_ann_file=data_root + 'rawData/Annotations/train.json',
+        img_prefix=data_root + 'divData/Images/train/',
+        ori_ann_file=data_root + 'SODA-D/rawData/Annotations/train.json',
         pipeline=[
             dict(type='LoadImageFromFile'),
             dict(type='LoadAnnotations', with_bbox=True)
@@ -88,22 +88,22 @@ test_pipeline = [
 
 
 data = dict(
-    samples_per_gpu=10,
-    workers_per_gpu=5,
+    samples_per_gpu=4,
+    workers_per_gpu=2,
     persistent_workers=True,
     train=train_dataset,
     val=dict(
         type=dataset_type,
         ann_file=data_root + 'divData/Annotations/val.json',
-        img_prefix=data_root + 'divData/Images/',
+        img_prefix=data_root + 'divData/Images/val/',
         pipeline=test_pipeline,
-        ori_ann_file=data_root + 'rawData/Annotations/val_wo_ignore.json'),
+        ori_ann_file=data_root + 'SODA-D/rawData/Annotations/val.json'),
     test=dict(
         type=dataset_type,
         ann_file=data_root + 'divData/Annotations/test.json',
-        img_prefix=data_root + 'divData/Images/',
+        img_prefix=data_root + 'divData/Images/test/',
         pipeline=test_pipeline,
-        ori_ann_file=data_root + 'rawData/Annotations/test_wo_ignore.json'))
+        ori_ann_file=data_root + 'SODA-D/rawData/Annotations/test.json'))
 
 # optimizer
 # default 8 gpu
@@ -116,10 +116,10 @@ optimizer = dict(
     paramwise_cfg=dict(norm_decay_mult=0., bias_decay_mult=0.))
 optimizer_config = dict(grad_clip=None)
 
-max_epochs = 70
+max_epochs = 75
 num_last_epochs = 15
 resume_from = None
-interval = 10
+interval = 75
 
 # learning policy
 lr_config = dict(
@@ -154,11 +154,6 @@ custom_hooks = [
 checkpoint_config = dict(interval=1)
 evaluation = dict(
     save_best='auto',
-    # The evaluation interval is 'interval' when running epoch is
-    # less than ‘max_epochs - num_last_epochs’.
-    # The evaluation interval is 1 when running epoch is greater than
-    # or equal to ‘max_epochs - num_last_epochs’.
     interval=interval,
-    dynamic_intervals=[(max_epochs - num_last_epochs, 1)],
     metric='bbox')
 

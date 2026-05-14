@@ -5,6 +5,7 @@ import os
 import os.path as osp
 import time
 import warnings
+import sys
 
 import mmcv
 import torch
@@ -13,6 +14,11 @@ from mmcv import Config, DictAction
 from mmcv.runner import get_dist_info, init_dist
 from mmcv.utils import get_git_hash
 
+# Ensure project root is on sys.path so local 'mmdet' and custom datasets are importable
+PROJECT_ROOT = osp.dirname(osp.dirname(osp.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from mmdet import __version__
 from mmdet.apis import init_random_seed, set_random_seed, train_detector
 from mmdet.datasets import build_dataset
@@ -20,6 +26,14 @@ from mmdet.models import build_detector
 from mmdet.utils import (collect_env, get_device, get_root_logger,
                          replace_cfg_vals, rfnext_init_model,
                          setup_multi_processes, update_data_root)
+
+# Import custom dataset to register it in the DATASETS registry
+try:
+    import mmdet.datasets.sodad  # noqa: F401
+except Exception:
+    # Registration will fail if the module cannot be imported,
+    # but training will surface a clear error later.
+    pass
 
 
 def parse_args():

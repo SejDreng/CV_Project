@@ -4,21 +4,47 @@ import os
 import os.path as osp
 import time
 import warnings
+import sys
 
-import mmcv
-import torch
 from mmcv import Config, DictAction
-from mmcv.cnn import fuse_conv_bn
-from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
-                         wrap_fp16_model)
 
-from mmdet.apis import multi_gpu_test, single_gpu_test
-from mmdet.datasets import (build_dataloader, build_dataset,
-                            replace_ImageToTensor)
-from mmdet.models import build_detector
-from mmdet.utils import (build_ddp, build_dp, compat_cfg, get_device,
-                         replace_cfg_vals, rfnext_init_model,
-                         setup_multi_processes, update_data_root)
+# Ensure project root is on sys.path (for local modules/datasets)
+PROJECT_ROOT = osp.dirname(osp.dirname(osp.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+
+def run_mmyolo_eval(cfg, args):
+    """Run evaluation for MMYOLO/MMEngine-style configs (YOLOv8, etc.)."""
+    try:
+        from mmengine.evaluator import DumpResults
+        from mmengine.runner import Runner
+    except Exception as e:
+        raise RuntimeError(
+            'This config appears to be MMYOLO/MMEngine-style, but mmengine is '
+            'not available in the current environment. Please install '
+            'mmengine/mmcv>=2.0.0/mmdet>=3.0.0 and try again.'
+        ) from e
+
+    # Match mmyolo/tools/test.py: CLI launcher overrides saved config (e.g.
+    # launcher=pytorch from distributed training) for single-GPU test.
+    cfg.launcher = args.launcher
+    if args.cfg_options is not None:
+        cfg.merge_from_dict(args.cfg_options)
+
+    # Set checkpoint and work_dir
+    cfg.load_from = args.checkpoint
+    if args.work_dir is not None:
+        cfg.work_dir = args.work_dir
+
+    # MMEngine will build dataloaders/evaluators from cfg.test_*
+    runner = Runner.from_cfg(cfg)
+    if args.out is not None:
+        runner.test_evaluator.metrics.append(
+            DumpResults(out_file_path=args.out))
+    # Single or distributed handled internally by Runner based on cfg/launch
+    runner.test()
+    return
 
 
 def parse_args():
@@ -134,6 +160,33 @@ def main():
         raise ValueError('The output file must be a pkl file.')
 
     cfg = Config.fromfile(args.config)
+
+    # If this is an MMYOLO/MMEngine-style config (e.g., YOLOv8), delegate.
+    # Heuristics: presence of test_dataloader or default_scope == 'mmyolo'
+    if ('test_dataloader' in cfg
+            or getattr(cfg, 'default_scope', None) == 'mmyolo'):
+        # MMEngine Runner only assigns self.cfg when the object is
+        # mmengine.config.Config (or dict). `from mmcv import Config` can yield
+        # a different Config type, so Runner.__init__ skips assigning self.cfg
+        # and later crashes with AttributeError on self.cfg.filename.
+        from mmengine.config import Config as MMEngineConfig
+        cfg = MMEngineConfig.fromfile(args.config)
+        run_mmyolo_eval(cfg, args)
+        return
+
+    # Lazy-import classic MMDet 2.x stack only if needed
+    import mmcv
+    import torch
+    from mmcv.cnn import fuse_conv_bn
+    from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
+                             wrap_fp16_model)
+    from mmdet.apis import multi_gpu_test, single_gpu_test
+    from mmdet.datasets import (build_dataloader, build_dataset,
+                                replace_ImageToTensor)
+    from mmdet.models import build_detector
+    from mmdet.utils import (build_ddp, build_dp, compat_cfg, get_device,
+                             replace_cfg_vals, rfnext_init_model,
+                             setup_multi_processes, update_data_root)
 
     # replace the ${key} with the value of cfg.key
     cfg = replace_cfg_vals(cfg)
