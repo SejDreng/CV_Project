@@ -159,10 +159,15 @@ class SODADeval:
 
         evaluateImg = self.evaluateImg
         maxDet = p.maxDets[-1]
-        self.evalImgs = [
-            evaluateImg(imgId, catId, areaRng, maxDet) for catId in catIds
-            for areaRng in p.areaRng for imgId in p.imgIds
-        ]
+        total = len(catIds) * len(p.areaRng) * len(p.imgIds)
+        self.evalImgs = []
+        for i, catId in enumerate(catIds):
+            for areaRng in p.areaRng:
+                for imgId in p.imgIds:
+                    self.evalImgs.append(evaluateImg(imgId, catId, areaRng, maxDet))
+            done = (i + 1) * len(p.areaRng) * len(p.imgIds)
+            print(f'\r  Evaluating: {done}/{total} ({100*done//total}%)', end='', flush=True)
+        print()
         self._paramsEval = copy.deepcopy(self.params)
         toc = time.time()
         print('DONE (t={:0.2f}s).'.format(toc - tic))
@@ -287,31 +292,41 @@ class SODADeval:
         gtIg = np.array([g['_ignore'] for g in gt])
         dtIg = np.zeros((T, D))
         if not len(ious) == 0:
+            # Vectorized matching: for each IoU threshold, greedily match
+            # detections (highest score first) to GTs (non-ignore first).
+            # ious shape: (D, G)
+            iou_mat = ious  # (D, G)
+            gt_ids = np.array([g['id'] for g in gt])
+            dt_ids = np.array([d['id'] for d in dt])
+            # find where GTs switch from non-ignore to ignore
+            first_ignore = int(np.searchsorted(gtIg, 1))
+
             for tind, t in enumerate(p.iouThrs):
-                for dind, d in enumerate(dt):
-                    # information about best match so far (m=-1 -> unmatched)
-                    iou = min([t, 1 - 1e-10])
-                    m = -1
-                    for gind, g in enumerate(gt):
-                        # if this gt already matched, and not a crowd, continue
-                        if gtm[tind, gind] > 0 and not iscrowd[gind]:
-                            continue
-                        # if dt matched to reg gt, and on ignore gt, stop
-                        if m > -1 and gtIg[m] == 0 and gtIg[gind] == 1:
-                            break
-                        # continue to next gt unless better match made
-                        if ious[dind, gind] < iou:
-                            continue
-                        # if match successful and best so far, store
-                        # appropriately
-                        iou = ious[dind, gind]
-                        m = gind
-                    # if match made store id of match for both dt and gt
-                    if m == -1:
+                thr = min(t, 1 - 1e-10)
+                gt_matched = np.zeros(G, dtype=bool)  # which GTs are taken
+                # mask: iou must meet threshold
+                valid = iou_mat >= thr  # (D, G)
+                for dind in range(D):
+                    if not valid[dind].any():
                         continue
+                    row = iou_mat[dind].copy()
+                    row[~valid[dind]] = -1.0
+                    row[gt_matched] = -1.0  # already matched GTs unavailable
+                    # prefer non-ignore GTs: zero out ignore GTs first, check
+                    row_nonig = row.copy()
+                    row_nonig[first_ignore:] = -1.0
+                    m = int(np.argmax(row_nonig))
+                    if row_nonig[m] < thr:
+                        # no non-ignore match; try ignore GTs
+                        row_ig = row.copy()
+                        row_ig[:first_ignore] = -1.0
+                        m = int(np.argmax(row_ig))
+                        if row_ig[m] < thr:
+                            continue  # no match at all
+                    gt_matched[m] = True
                     dtIg[tind, dind] = gtIg[m]
-                    dtm[tind, dind] = gt[m]['id']
-                    gtm[tind, m] = d['id']
+                    dtm[tind, dind] = gt_ids[m]
+                    gtm[tind, m] = dt_ids[dind]
         # set unmatched detections outside of area range to ignore
         a = np.array([d['area'] < aRng[0] or d['area'] > aRng[1]
                       for d in dt]).reshape((1, len(dt)))
@@ -408,8 +423,8 @@ class SODADeval:
                     fps = np.logical_and(np.logical_not(dtm),
                                          np.logical_not(dtIg))
 
-                    tp_sum = np.cumsum(tps, axis=1).astype(dtype=np.float)
-                    fp_sum = np.cumsum(fps, axis=1).astype(dtype=np.float)
+                    tp_sum = np.cumsum(tps, axis=1).astype(dtype=float)
+                    fp_sum = np.cumsum(fps, axis=1).astype(dtype=float)
                     for t, (tp, fp) in enumerate(zip(tp_sum, fp_sum)):
                         tp = np.array(tp)
                         fp = np.array(fp)

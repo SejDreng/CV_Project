@@ -470,12 +470,14 @@ class FIRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                          contrast_feats.transpose(2, 1).contiguous()),
             self.temperature).squeeze(1)
         # for numerical stability
+        if sim_logits.size(1) == 0:
+            return torch.tensor(0.0, requires_grad=True, device=anchor_feature.device)
         sim_logits_max, _ = torch.max(sim_logits, dim=1, keepdim=True)
         logits = sim_logits - sim_logits_max.detach()  # (num_gts, self.con_sample_num)
 
         exp_logits = torch.exp(logits)
         log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
-        pos_num = pos_signs.sum(dim=1).cuda()
+        pos_num = pos_signs.sum(dim=1).to(pos_signs.device)
         pos_num = pos_num + eps * (pos_num == 0)  # avoid dividing by zero
         mean_log_prob_pos = -(pos_signs * log_prob).sum(dim=1) / pos_num
         weighted_loss = loss_weights * mean_log_prob_pos
@@ -526,11 +528,12 @@ class FIRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                 as_tuple=False).view(-1)
             neg_inds = self._random_choice(
                 can_neg_inds, cur_sample_num - len(pos_inds))
+            device = pos_inds.device if pos_inds.numel() > 0 else neg_inds.device
             sample_inds.append(
-                torch.cat([pos_inds.cuda(), neg_inds.cuda()], dim=-1).view(1, -1))
+                torch.cat([pos_inds.to(device), neg_inds.to(device)], dim=-1).view(1, -1))
             pos_signs.append(
-                torch.cat([torch.ones_like(pos_inds.cuda()),
-                           torch.zeros_like(neg_inds.cuda())], dim=-1).view(1, -1))
+                torch.cat([torch.ones_like(pos_inds).to(device),
+                           torch.zeros_like(neg_inds).to(device)], dim=-1).view(1, -1))
         sample_inds = torch.cat(sample_inds, dim=0)
         pos_signs = torch.cat(pos_signs, dim=0)
         return sample_inds, pos_signs
@@ -560,10 +563,11 @@ class FIRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                 self.hq_gt_aug_cfg['trans_range'], self.hq_gt_aug_cfg['rescale_range']
             trans_num, rescale_num = \
                 self.hq_gt_aug_cfg['trans_num'], self.hq_gt_aug_cfg['rescale_num']
+            device = hq_gt_bboxes.device
             trans_ratios = torch.linspace(
-                trans_range[0], trans_range[1], trans_num).view(-1).cuda()
+                trans_range[0], trans_range[1], trans_num).view(-1).to(device)
             rescale_ratios = torch.linspace(
-                rescale_range[0], rescale_range[1], rescale_num).view(-1).cuda()
+                rescale_range[0], rescale_range[1], rescale_num).view(-1).to(device)
 
             gt_bboxes = hq_gt_bboxes.unsqueeze(1)
             # gt box translation
@@ -572,7 +576,7 @@ class FIRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
             h = hq_gt_bboxes[:, 2] - hq_gt_bboxes[:, 0]
             wh = torch.cat([w.view(-1, 1), h.view(-1, 1)], dim=1).unsqueeze(1)  # (num_gts, 1, 2)
             inter_mat = torch.cat(
-                [torch.eye(2), torch.eye(2) * (-1)], dim=0).cuda()  # (4, 2)
+                [torch.eye(2), torch.eye(2) * (-1)], dim=0).to(device)  # (4, 2)
             wh_mat = wh * inter_mat  # (num_gts, 4, 2)
             scaled_wh = torch.cat(  # (num_gts, 4*trans_num, 2)
                 [r * wh_mat for r in trans_ratios], dim=1)

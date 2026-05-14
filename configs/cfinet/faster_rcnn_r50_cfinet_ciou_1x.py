@@ -4,8 +4,11 @@ _base_ = [
     '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
 ]
 
-find_unused_parameters=True
+# Ablation: Improvement 2 only – CIoU bbox loss in RoI head
+
+find_unused_parameters = True
 rpn_weight = 0.9
+
 model = dict(
     type='FasterRCNN',
     neck=dict(
@@ -62,14 +65,14 @@ model = dict(
                     loss_weight=10.0 * rpn_weight))]),
     roi_head=dict(
         type='FIRoIHead',
-        num_gpus=3,
+        num_gpus=2,
         temperature=0.6,
         contrast_loss_weights=0.50,
         num_con_queue=256,
         con_sampler_cfg=dict(
             num=128,
             pos_fraction=[0.5, 0.25, 0.125]),
-        con_queue_dir="./work_dirs/roi_feats/cfinet",
+        con_queue_dir='./work_dirs/roi_feats/cfinet_ciou',
         ins_quality_assess_cfg=dict(
             cls_score=0.05,
             hq_score=0.65,
@@ -91,10 +94,10 @@ model = dict(
                 target_means=[0., 0., 0., 0.],
                 target_stds=[0.1, 0.1, 0.2, 0.2]),
             reg_class_agnostic=False,
+            reg_decoded_bbox=True,
             loss_cls=dict(
                 type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
-            loss_bbox=dict(type='L1Loss', loss_weight=1.0))),
-# model training and testing settings
+            loss_bbox=dict(type='CIoULoss', loss_weight=1.0))),
     train_cfg=dict(
         rpn=[
             dict(
@@ -133,17 +136,14 @@ model = dict(
         rcnn=dict(score_thr=0.05))
 )
 
-fp16 = dict(loss_scale='dynamic')   # mixed precision
+fp16 = dict(loss_scale='dynamic')
 
-data = dict(
-    samples_per_gpu=2,
-    workers_per_gpu=2)
+data = dict(samples_per_gpu=2, workers_per_gpu=2)
 
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001,
                  paramwise_cfg=dict(custom_keys={
-                     'roi_head.fc_enc': dict(lr_mult=0.05), 
-                     'roi_head.fc_proj': dict(lr_mult=0.05)})
-                 )
+                     'roi_head.fc_enc': dict(lr_mult=0.05),
+                     'roi_head.fc_proj': dict(lr_mult=0.05)}))
 
 lr_config = dict(
     policy='step',
@@ -154,4 +154,3 @@ lr_config = dict(
 total_epochs = 12
 evaluation = dict(interval=12, metric='bbox')
 log_config = dict(interval=50)
-

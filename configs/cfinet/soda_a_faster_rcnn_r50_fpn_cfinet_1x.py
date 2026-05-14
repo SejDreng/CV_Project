@@ -1,7 +1,8 @@
 _base_ = [
     '../_base_/models/faster_rcnn_r50_fpn.py',
-    '../_base_/datasets/sodad.py',
-    '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
+    '../_base_/datasets/sodaa.py',
+    '../_base_/schedules/schedule_1x.py', 
+    '../_base_/default_runtime.py'
 ]
 
 find_unused_parameters=True
@@ -62,7 +63,7 @@ model = dict(
                     loss_weight=10.0 * rpn_weight))]),
     roi_head=dict(
         type='FIRoIHead',
-        num_gpus=3,
+        num_gpus=1,
         temperature=0.6,
         contrast_loss_weights=0.50,
         num_con_queue=256,
@@ -136,7 +137,7 @@ model = dict(
 fp16 = dict(loss_scale='dynamic')   # mixed precision
 
 data = dict(
-    samples_per_gpu=2,
+    samples_per_gpu=4,
     workers_per_gpu=2)
 
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001,
@@ -152,6 +153,6 @@ lr_config = dict(
     warmup_ratio=0.001,
     step=[8, 11])
 total_epochs = 12
-evaluation = dict(interval=12, metric='bbox')
+evaluation = dict(interval=12, metric='bbox', with_merge=True)
 log_config = dict(interval=50)
 

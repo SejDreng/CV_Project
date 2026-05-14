@@ -1,11 +1,12 @@
 _base_ = [
     '../_base_/models/faster_rcnn_r50_fpn.py',
-    '../_base_/datasets/sodad.py',
+    '../_base_/datasets/sodaa.py',
     '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
 ]
 
-find_unused_parameters=True
+find_unused_parameters = True
 rpn_weight = 0.9
+
 model = dict(
     type='FasterRCNN',
     neck=dict(
@@ -62,14 +63,14 @@ model = dict(
                     loss_weight=10.0 * rpn_weight))]),
     roi_head=dict(
         type='FIRoIHead',
-        num_gpus=3,
+        num_gpus=2,
         temperature=0.6,
         contrast_loss_weights=0.50,
         num_con_queue=256,
         con_sampler_cfg=dict(
             num=128,
             pos_fraction=[0.5, 0.25, 0.125]),
-        con_queue_dir="./work_dirs/roi_feats/cfinet",
+        con_queue_dir='./work_dirs/roi_feats/cfinet_sodaa_ms',
         ins_quality_assess_cfg=dict(
             cls_score=0.05,
             hq_score=0.65,
@@ -94,7 +95,6 @@ model = dict(
             loss_cls=dict(
                 type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
             loss_bbox=dict(type='L1Loss', loss_weight=1.0))),
-# model training and testing settings
     train_cfg=dict(
         rpn=[
             dict(
@@ -133,17 +133,35 @@ model = dict(
         rcnn=dict(score_thr=0.05))
 )
 
-fp16 = dict(loss_scale='dynamic')   # mixed precision
+fp16 = dict(loss_scale='dynamic')
 
 data = dict(
     samples_per_gpu=2,
-    workers_per_gpu=2)
+    workers_per_gpu=2,
+    train=dict(
+        pipeline=[
+            dict(type='LoadImageFromFile'),
+            dict(type='LoadAnnotations', with_bbox=True),
+            dict(
+                type='Resize',
+                img_scale=[(640, 640), (800, 800)],
+                multiscale_mode='range',
+                keep_ratio=True),
+            dict(type='RandomFlip', flip_ratio=0.5),
+            dict(
+                type='Normalize',
+                mean=[123.675, 116.28, 103.53],
+                std=[58.395, 57.12, 57.375],
+                to_rgb=True),
+            dict(type='Pad', size=(800, 800)),
+            dict(type='DefaultFormatBundle'),
+            dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
+        ]))
 
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001,
                  paramwise_cfg=dict(custom_keys={
-                     'roi_head.fc_enc': dict(lr_mult=0.05), 
-                     'roi_head.fc_proj': dict(lr_mult=0.05)})
-                 )
+                     'roi_head.fc_enc': dict(lr_mult=0.05),
+                     'roi_head.fc_proj': dict(lr_mult=0.05)}))
 
 lr_config = dict(
     policy='step',
@@ -152,6 +170,5 @@ lr_config = dict(
     warmup_ratio=0.001,
     step=[8, 11])
 total_epochs = 12
-evaluation = dict(interval=12, metric='bbox')
+evaluation = dict(interval=12, metric='bbox', with_merge=True)
 log_config = dict(interval=50)
-

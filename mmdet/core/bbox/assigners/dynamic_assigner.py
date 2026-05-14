@@ -237,7 +237,8 @@ class DynamicAssigner(BaseAssigner):
 
     def get_gt_pos_thrs(self, areas, scale_ratio):
         areas = torch.sqrt(areas / (scale_ratio ** 2))
-        thrs = torch.max(torch.tensor(self.low_quality_iou_thr).cuda(),
-                         torch.tensor(self.base_pos_iou_thr).cuda() + self.r * torch.log2(areas / self.base_size))
-        thrs = torch.min(torch.tensor(self.normal_iou_thr).cuda(), thrs)
+        device = areas.device
+        thrs = torch.max(torch.tensor(self.low_quality_iou_thr).to(device),
+                         torch.tensor(self.base_pos_iou_thr).to(device) + self.r * torch.log2(areas / self.base_size))
+        thrs = torch.min(torch.tensor(self.normal_iou_thr).to(device), thrs)
         return thrs
